@@ -1,5 +1,5 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { Search, Store, LogOut, User, ShoppingBag } from 'lucide-react';
+import { Search, Store, LogOut, User, ShoppingBag, Shield } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { User as SupabaseUser } from '@supabase/supabase-js';
@@ -25,6 +25,8 @@ export default function Layout() {
     await supabase.auth.signOut();
     navigate('/');
   };
+
+  const isAdmin = user?.app_metadata?.role === 'admin';
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans">
@@ -55,6 +57,16 @@ export default function Layout() {
              
              {user ? (
                <div className="flex items-center gap-2">
+                 {isAdmin && (
+                   <Link
+                     to="/admin"
+                     className="flex items-center gap-1.5 text-sm font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-3 py-1.5 rounded-lg transition-colors"
+                     title="Admin Panel"
+                   >
+                     <Shield className="w-4 h-4 text-purple-600" />
+                     <span>Admin Panel</span>
+                   </Link>
+                 )}
                  <Link 
                    to="/my-orders"
                    className="flex items-center gap-1.5 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
@@ -72,6 +84,7 @@ export default function Layout() {
                    <LogOut className="w-5 h-5" />
                  </button>
                </div>
+
              ) : (
                <Link 
                  to="/auth"
