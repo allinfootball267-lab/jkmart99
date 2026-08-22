@@ -11,7 +11,8 @@ import {
   ChevronLeft,
   Menu,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getStoredStoreName, saveStoredStoreName } from '../lib/utils';
 
 const navItems = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -25,6 +26,30 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [storeName, setStoreName] = useState<string>(getStoredStoreName());
+
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const { data } = await supabase.from('settings').select('store_name').single();
+        if (data?.store_name) {
+          setStoreName(data.store_name);
+          saveStoredStoreName(data.store_name);
+        }
+      } catch (err) {
+        console.error('Error loading settings in AdminLayout:', err);
+      }
+    }
+
+    loadSettings();
+
+    const handleSettingsUpdate = () => {
+      setStoreName(getStoredStoreName());
+    };
+
+    window.addEventListener('store_settings_updated', handleSettingsUpdate);
+    return () => window.removeEventListener('store_settings_updated', handleSettingsUpdate);
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -41,8 +66,8 @@ export default function AdminLayout() {
           </div>
           {!collapsed && (
             <div>
-              <span className="text-sm font-bold text-white tracking-tight">JKmart 99</span>
-              <span className="block text-[10px] font-medium text-slate-500 uppercase tracking-widest">Admin Panel</span>
+              <span className="text-sm font-bold text-white tracking-tight whitespace-nowrap">{storeName}</span>
+              <span className="block text-[10px] font-medium text-slate-500 uppercase tracking-widest whitespace-nowrap">Admin Panel</span>
             </div>
           )}
         </NavLink>

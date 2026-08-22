@@ -13,8 +13,12 @@ CREATE TABLE IF NOT EXISTS public.products (
   discount_price numeric,
   stock integer NOT NULL DEFAULT 0,
   image_url text,
+  category text DEFAULT 'General',
   created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now())
 );
+
+-- Migration helper for existing databases:
+-- ALTER TABLE public.products ADD COLUMN IF NOT EXISTS category text DEFAULT 'General';
 
 -- 2. ORDERS TABLE
 CREATE TABLE IF NOT EXISTS public.orders (

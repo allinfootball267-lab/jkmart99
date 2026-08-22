@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { CartProvider } from './context/CartContext';
+import CartDrawer from './components/CartDrawer';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import ProductPage from './pages/ProductPage';
@@ -10,17 +12,20 @@ import MyOrders from './pages/MyOrders';
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Public Customer Routes */}
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Home />} />
-          <Route path="product/:id" element={<ProductPage />} />
-          <Route path="checkout/:id" element={<Checkout />} />
-          <Route path="policies" element={<TermsAndPolicies />} />
-          <Route path="auth" element={<Auth />} />
-          <Route path="my-orders" element={<MyOrders />} />
-        </Route>
-      </Routes>
+      <CartProvider>
+        <CartDrawer />
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Home />} />
+            <Route path="product/:id" element={<ProductPage />} />
+            <Route path="checkout" element={<Checkout />} />
+            <Route path="checkout/:id" element={<Checkout />} />
+            <Route path="policies" element={<TermsAndPolicies />} />
+            <Route path="auth" element={<Auth />} />
+            <Route path="my-orders" element={<MyOrders />} />
+          </Route>
+        </Routes>
+      </CartProvider>
     </BrowserRouter>
   );
 }

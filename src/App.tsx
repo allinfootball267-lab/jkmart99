@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { CartProvider } from './context/CartContext';
+import CartDrawer from './components/CartDrawer';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import ProductPage from './pages/ProductPage';
@@ -18,29 +20,32 @@ import SettingsAdmin from './pages/admin/Settings';
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Public Customer Routes */}
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Home />} />
-          <Route path="product/:id" element={<ProductPage />} />
-          <Route path="checkout/:id" element={<Checkout />} />
-          <Route path="policies" element={<TermsAndPolicies />} />
-          <Route path="auth" element={<Auth />} />
-          <Route path="my-orders" element={<MyOrders />} />
-        </Route>
-
-        {/* Protected Admin Routes */}
-        <Route element={<AdminGuard />}>
-          <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="products" element={<ProductsAdmin />} />
-            <Route path="orders" element={<OrdersAdmin />} />
-            <Route path="users" element={<UsersAdmin />} />
-            <Route path="settings" element={<SettingsAdmin />} />
+      <CartProvider>
+        <CartDrawer />
+        <Routes>
+          {/* Public Customer Routes */}
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Home />} />
+            <Route path="product/:id" element={<ProductPage />} />
+            <Route path="checkout" element={<Checkout />} />
+            <Route path="checkout/:id" element={<Checkout />} />
+            <Route path="policies" element={<TermsAndPolicies />} />
+            <Route path="auth" element={<Auth />} />
+            <Route path="my-orders" element={<MyOrders />} />
           </Route>
-        </Route>
-      </Routes>
+
+          {/* Protected Admin Routes */}
+          <Route element={<AdminGuard />}>
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="products" element={<ProductsAdmin />} />
+              <Route path="orders" element={<OrdersAdmin />} />
+              <Route path="users" element={<UsersAdmin />} />
+              <Route path="settings" element={<SettingsAdmin />} />
+            </Route>
+          </Route>
+        </Routes>
+      </CartProvider>
     </BrowserRouter>
   );
 }
-

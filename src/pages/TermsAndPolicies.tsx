@@ -1,10 +1,38 @@
-import React, { useState } from 'react';
-import { Shield, FileText, RefreshCw, Truck, Mail, Store } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Shield, FileText, RefreshCw, Truck, Mail, Store, Phone, MapPin, MessageSquare } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { getStoredStoreName } from '../lib/utils';
 
 type TabType = 'terms' | 'privacy' | 'refunds' | 'shipping' | 'contact';
 
 export default function TermsAndPolicies() {
   const [activeTab, setActiveTab] = useState<TabType>('terms');
+  const [storeInfo, setStoreInfo] = useState({
+    store_name: getStoredStoreName(),
+    phone: '',
+    whatsapp_number: '',
+    address: '',
+  });
+
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const { data } = await supabase.from('settings').select('*').single();
+        if (data) {
+          setStoreInfo({
+            store_name: data.store_name || getStoredStoreName(),
+            phone: data.phone || '',
+            whatsapp_number: data.whatsapp_number || '',
+            address: data.address || '',
+          });
+        }
+      } catch (err) {
+        console.error('Error loading settings in policies:', err);
+      }
+    }
+
+    loadSettings();
+  }, []);
 
   const tabs = [
     { id: 'terms', name: 'Terms & Conditions', icon: FileText },
@@ -39,24 +67,20 @@ export default function TermsAndPolicies() {
         })}
       </div>
 
-      <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-6 md:p-8 prose prose-slate max-w-none">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 md:p-8 shadow-sm prose max-w-none text-slate-600">
         {activeTab === 'terms' && (
           <div>
             <h2 className="text-xl font-bold text-slate-900 mb-4">Terms & Conditions</h2>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              Welcome to JKmart 99. By accessing our website and placing orders, you agree to comply with and be bound by the following terms and conditions.
+            <p className="leading-relaxed mb-4">
+              Welcome to <strong>{storeInfo.store_name}</strong>. By accessing and using our website or placing an order, you agree to be bound by the following terms and conditions.
             </p>
-            <h3 className="text-lg font-semibold text-slate-900 mt-6 mb-2">1. Ordering and Guest Checkout</h3>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              We offer guest checkout for your convenience. It is your responsibility to provide accurate billing, shipping, and contact details. Incorrect details may result in delivery delays or cancellation.
+            <h3 className="text-lg font-semibold text-slate-800 mt-6 mb-2">1. Orders & Pricing</h3>
+            <p className="leading-relaxed mb-4">
+              All orders are subject to acceptance and product availability. Prices for items are stated in Indian Rupees (₹) and include applicable taxes unless specified otherwise. We reserve the right to revise product listings, prices, and delivery charges at any time without prior notice.
             </p>
-            <h3 className="text-lg font-semibold text-slate-900 mt-6 mb-2">2. Pricing and Availability</h3>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              All prices listed on the website are in Indian Rupees (INR) and are inclusive of local taxes where applicable. Delivery charges are calculated dynamically at checkout. We reserve the right to modify prices and withdraw products due to stock availability.
-            </p>
-            <h3 className="text-lg font-semibold text-slate-900 mt-6 mb-2">3. Payment Methods</h3>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              We accept payments via Cash on Delivery (COD) and online UPI/QR Code payments via Razorpay. All online transactions are processed securely through payment gateway integration.
+            <h3 className="text-lg font-semibold text-slate-800 mt-6 mb-2">2. Product Information & Accuracy</h3>
+            <p className="leading-relaxed mb-4">
+              We make every effort to display the colors, specifications, and details of our products accurately. However, actual packaging, colors, and materials may slightly vary.
             </p>
           </div>
         )}
@@ -64,20 +88,12 @@ export default function TermsAndPolicies() {
         {activeTab === 'privacy' && (
           <div>
             <h2 className="text-xl font-bold text-slate-900 mb-4">Privacy Policy</h2>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              At JKmart 99, we value your privacy and are committed to protecting your personal information.
+            <p className="leading-relaxed mb-4">
+              At <strong>{storeInfo.store_name}</strong>, your privacy is of utmost importance to us. This Privacy Policy outlines how your personal data is collected, stored, and used.
             </p>
-            <h3 className="text-lg font-semibold text-slate-900 mt-6 mb-2">Information We Collect</h3>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              When you purchase a product using guest checkout, we collect your name, phone number, physical address, city, and pin code to fulfill your order.
-            </p>
-            <h3 className="text-lg font-semibold text-slate-900 mt-6 mb-2">How We Use Your Information</h3>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              Your details are used solely to deliver the products you ordered, communicate updates about your order status, and process secure payments. We do not sell or share your data with third-party advertisers.
-            </p>
-            <h3 className="text-lg font-semibold text-slate-900 mt-6 mb-2">Security</h3>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              All information is securely stored inside database environments protected by Row Level Security policies.
+            <h3 className="text-lg font-semibold text-slate-800 mt-6 mb-2">Information We Collect</h3>
+            <p className="leading-relaxed mb-4">
+              When you place an order, we collect essential details such as your Name, Phone Number, Delivery Address, and PIN Code to fulfill and dispatch your items.
             </p>
           </div>
         )}
@@ -85,20 +101,12 @@ export default function TermsAndPolicies() {
         {activeTab === 'refunds' && (
           <div>
             <h2 className="text-xl font-bold text-slate-900 mb-4">Refund & Cancellation Policy</h2>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              We strive to make shopping at JKmart 99 a seamless experience. Please read our guidelines on cancellations and refunds:
+            <p className="leading-relaxed mb-4">
+              We want you to be completely delighted with your purchase. If you experience an issue with your delivered items, please review our refund and return guidelines below.
             </p>
-            <h3 className="text-lg font-semibold text-slate-900 mt-6 mb-2">1. Cancellations</h3>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              You can request to cancel your order within 2 hours of placing it. Please call or WhatsApp us on our store phone number immediately for cancellation. Once an order is marked as 'Shipped', it cannot be cancelled.
-            </p>
-            <h3 className="text-lg font-semibold text-slate-900 mt-6 mb-2">2. Returns & Replacements</h3>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              Returns are only accepted if the product delivered is damaged, defective, or incorrect. You must raise a claim within 24 hours of delivery by providing images/videos of the package and receipt via WhatsApp.
-            </p>
-            <h3 className="text-lg font-semibold text-slate-900 mt-6 mb-2">3. Refunds</h3>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              Once a return request is approved, we will pick up the item and initiate a refund. Online prepaid payments (Razorpay) will be refunded to the original source account within 5-7 business days. For COD orders, we will transfer the amount via UPI.
+            <h3 className="text-lg font-semibold text-slate-800 mt-6 mb-2">Damaged or Defective Items</h3>
+            <p className="leading-relaxed mb-4">
+              If an item is delivered in damaged or broken condition, please report it within 24 hours of delivery. We will arrange a replacement or full refund upon inspection.
             </p>
           </div>
         )}
@@ -106,20 +114,12 @@ export default function TermsAndPolicies() {
         {activeTab === 'shipping' && (
           <div>
             <h2 className="text-xl font-bold text-slate-900 mb-4">Shipping & Delivery Policy</h2>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              We aim to deliver products safely and efficiently directly to your doorstep.
+            <p className="leading-relaxed mb-4">
+              We provide fast and reliable delivery to ensure your products reach you safely and promptly.
             </p>
-            <h3 className="text-lg font-semibold text-slate-900 mt-6 mb-2">1. Delivery Timeline</h3>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              We offer fast local delivery. Most orders are processed within 24 hours and delivered within 1 to 3 business days depending on your city and local pin code.
-            </p>
-            <h3 className="text-lg font-semibold text-slate-900 mt-6 mb-2">2. Delivery Charges</h3>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              A flat delivery fee is applied based on settings configured by the administrator (standard charge is ₹50). The exact charge is visible on the order checkout page prior to finalizing your purchase.
-            </p>
-            <h3 className="text-lg font-semibold text-slate-900 mt-6 mb-2">3. Tracking</h3>
-            <p className="text-slate-600 leading-relaxed mb-4">
-              Once your order status changes, we will send an SMS or WhatsApp confirmation with delivery details.
+            <h3 className="text-lg font-semibold text-slate-800 mt-6 mb-2">Delivery Timelines</h3>
+            <p className="leading-relaxed mb-4">
+              Local deliveries are typically dispatched and delivered within 1–3 business days from order confirmation.
             </p>
           </div>
         )}
@@ -130,21 +130,53 @@ export default function TermsAndPolicies() {
             <p className="text-slate-600 leading-relaxed mb-6">
               If you have any questions, feedback, or complaints regarding orders, payments, or cancellations, please reach out to us:
             </p>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3">
+            <div className="space-y-4 not-prose">
+              <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
                 <Store className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
                 <div>
-                  <h4 className="font-semibold text-slate-900">JKmart 99</h4>
-                  <p className="text-slate-600 text-sm">Neighborhood Electronics Store</p>
+                  <h4 className="font-semibold text-slate-900">{storeInfo.store_name}</h4>
+                  <p className="text-slate-600 text-sm">Official Store</p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <Mail className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
-                <div>
-                  <h4 className="font-semibold text-slate-900">Email support</h4>
-                  <p className="text-slate-600 text-sm">support@jkmart99.com</p>
+
+              {storeInfo.phone && (
+                <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <Phone className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+                  <div>
+                    <h4 className="font-semibold text-slate-900">Phone Support</h4>
+                    <a href={`tel:${storeInfo.phone}`} className="text-blue-600 text-sm hover:underline font-medium">
+                      {storeInfo.phone}
+                    </a>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {storeInfo.whatsapp_number && (
+                <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <MessageSquare className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
+                  <div>
+                    <h4 className="font-semibold text-slate-900">WhatsApp Support</h4>
+                    <a
+                      href={`https://wa.me/${storeInfo.whatsapp_number.replace(/[^0-9]/g, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-600 text-sm hover:underline font-medium"
+                    >
+                      {storeInfo.whatsapp_number}
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {storeInfo.address && (
+                <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <MapPin className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+                  <div>
+                    <h4 className="font-semibold text-slate-900">Store Address</h4>
+                    <p className="text-slate-600 text-sm whitespace-pre-line">{storeInfo.address}</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

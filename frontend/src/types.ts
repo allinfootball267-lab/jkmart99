@@ -7,7 +7,22 @@ export type Product = {
   discount_price: number | null;
   stock: number;
   image_url: string | null;
+  category?: string | null;
   created_at: string;
+};
+
+export type CartItem = {
+  product: Product;
+  quantity: number;
+};
+
+export type PaymentMethod = {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  type: 'COD' | 'UPI' | 'CUSTOM';
+  instructions?: string;
 };
 
 export type Order = {
@@ -18,7 +33,7 @@ export type Order = {
   city: string;
   pin_code: string;
   total_amount: number;
-  payment_method: 'COD' | 'UPI';
+  payment_method: string;
   status: 'Pending' | 'Confirmed' | 'Shipped' | 'Delivered' | 'Cancelled';
   created_at: string;
 };
@@ -39,4 +54,5 @@ export type Settings = {
   whatsapp_number: string;
   upi_id: string;
   delivery_charges: number;
+  payment_methods?: PaymentMethod[];
 };

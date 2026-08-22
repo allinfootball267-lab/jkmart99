@@ -66,12 +66,6 @@ export default function OrdersAdmin() {
     );
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this order?')) return;
-    await supabase.from('orders').delete().eq('id', id);
-    setOrders((prev) => prev.filter((o) => o.id !== id));
-  };
-
   const filtered = orders.filter((o) => {
     const matchesSearch =
       o.customer_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -254,20 +248,13 @@ export default function OrdersAdmin() {
                         <select
                           value={order.status}
                           onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                          className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium"
                         >
                           {STATUS_OPTIONS.map((s) => (
                             <option key={s} value={s}>{s}</option>
                           ))}
                         </select>
                       </div>
-                      <div className="flex-1" />
-                      <button
-                        onClick={() => handleDelete(order.id)}
-                        className="text-xs text-red-500 hover:text-red-700 font-medium hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
-                      >
-                        Delete Order
-                      </button>
                     </div>
                   </div>
                 )}
