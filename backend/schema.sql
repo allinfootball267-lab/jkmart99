@@ -87,7 +87,7 @@ CREATE POLICY "products_admin_delete" ON public.products FOR DELETE TO authentic
 
 -- Orders Policies
 CREATE POLICY "orders_public_insert" ON public.orders FOR INSERT WITH CHECK (true);
-CREATE POLICY "orders_select_policy" ON public.orders FOR SELECT TO authenticated, anon USING (((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') OR (auth.uid() = user_id) OR (user_id IS NULL));
+CREATE POLICY "orders_select_policy" ON public.orders FOR SELECT TO authenticated, anon USING (true);
 CREATE POLICY "orders_admin_update" ON public.orders FOR UPDATE TO authenticated USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 CREATE POLICY "orders_admin_delete" ON public.orders FOR DELETE TO authenticated USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 

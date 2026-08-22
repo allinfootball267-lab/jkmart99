@@ -11,6 +11,8 @@ import {
   ChevronDown,
   Phone,
   MapPin,
+  Trash2,
+  Lock,
 } from 'lucide-react';
 
 const STATUS_OPTIONS = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'] as const;
@@ -59,11 +61,40 @@ export default function OrdersAdmin() {
     fetchOrders();
   }, []);
 
-  const handleStatusChange = async (orderId: string, newStatus: string) => {
-    await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
+  const handleStatusChange = async (orderId: string, currentStatus: string, newStatus: string) => {
+    if (currentStatus === 'Delivered') {
+      alert('Delivered orders are completed and cannot be changed back to other statuses.');
+      return;
+    }
+    if (newStatus === 'Delivered') {
+      if (!confirm('Marking this order as "Delivered" will finalize and lock the order. Proceed?')) {
+        return;
+      }
+    }
+    const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
+    if (error) {
+      alert('Failed to update status: ' + error.message);
+      return;
+    }
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: newStatus as Order['status'] } : o))
     );
+  };
+
+  const handleDeleteOrder = async (orderId: string, orderStatus: string, shortId: string) => {
+    if (orderStatus === 'Delivered') {
+      alert('Delivered orders cannot be deleted in order to preserve sales records and transaction history.');
+      return;
+    }
+    if (!confirm(`Are you sure you want to delete order #${shortId}? This action cannot be undone.`)) {
+      return;
+    }
+    const { error } = await supabase.from('orders').delete().eq('id', orderId);
+    if (error) {
+      alert('Failed to delete order: ' + error.message);
+      return;
+    }
+    setOrders((prev) => prev.filter((o) => o.id !== orderId));
   };
 
   const filtered = orders.filter((o) => {
@@ -157,6 +188,7 @@ export default function OrdersAdmin() {
           {filtered.map((order) => {
             const isExpanded = expandedOrder === order.id;
             const shortId = order.id.slice(0, 8).toUpperCase();
+            const isDelivered = order.status === 'Delivered';
 
             return (
               <div
@@ -175,6 +207,11 @@ export default function OrdersAdmin() {
                         {getStatusIcon(order.status)}
                         {order.status}
                       </span>
+                      {isDelivered && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                          <Lock className="w-2.5 h-2.5" /> Locked
+                        </span>
+                      )}
                     </div>
                     <div className="text-sm font-medium text-slate-900">{order.customer_name}</div>
                     <div className="text-xs text-slate-400">
@@ -242,18 +279,51 @@ export default function OrdersAdmin() {
                     )}
 
                     {/* Actions */}
-                    <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                      {/* Status Update Control */}
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-slate-500">Update Status:</span>
-                        <select
-                          value={order.status}
-                          onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                          className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium"
-                        >
-                          {STATUS_OPTIONS.map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
+                        <span className="text-xs font-semibold text-slate-500">Order Status:</span>
+                        {isDelivered ? (
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-semibold">
+                            <Lock className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Delivered (Finalized)</span>
+                          </div>
+                        ) : (
+                          <select
+                            value={order.status}
+                            onChange={(e) => handleStatusChange(order.id, order.status, e.target.value)}
+                            className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer font-medium"
+                          >
+                            {STATUS_OPTIONS.map((s) => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+
+                      {/* Delete Order Button */}
+                      <div>
+                        {isDelivered ? (
+                          <button
+                            type="button"
+                            disabled
+                            title="Delivered orders cannot be deleted to preserve sales records."
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-400 bg-slate-100 rounded-lg cursor-not-allowed border border-slate-200"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                            Delete Locked (Delivered)
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteOrder(order.id, order.status, shortId)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors"
+                            title="Delete this order"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Delete Order
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

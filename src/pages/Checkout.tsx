@@ -305,12 +305,21 @@ export default function Checkout() {
           </div>
         </div>
 
-        <Link
-          to="/"
-          className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-xl font-semibold transition-colors shadow-sm inline-block text-sm"
-        >
-          Continue Shopping
-        </Link>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link
+            to={`/track-order?id=${createdOrder.id}`}
+            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-6 py-3 rounded-xl font-semibold transition-colors shadow-xs inline-flex items-center justify-center gap-2 text-sm"
+          >
+            <Truck className="w-4 h-4" />
+            <span>Track This Order</span>
+          </Link>
+          <Link
+            to="/"
+            className="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-3 rounded-xl font-semibold transition-colors inline-flex items-center justify-center text-sm"
+          >
+            Continue Shopping
+          </Link>
+        </div>
       </div>
     );
   }

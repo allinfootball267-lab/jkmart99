@@ -8,6 +8,7 @@ import Checkout from './pages/Checkout';
 import TermsAndPolicies from './pages/TermsAndPolicies';
 import Auth from './pages/Auth';
 import MyOrders from './pages/MyOrders';
+import TrackOrder from './pages/TrackOrder';
 
 import AdminGuard from './components/AdminGuard';
 import AdminLayout from './components/AdminLayout';
@@ -32,6 +33,8 @@ export default function App() {
             <Route path="policies" element={<TermsAndPolicies />} />
             <Route path="auth" element={<Auth />} />
             <Route path="my-orders" element={<MyOrders />} />
+            <Route path="track-order" element={<TrackOrder />} />
+            <Route path="track" element={<TrackOrder />} />
           </Route>
 
           {/* Protected Admin Routes */}

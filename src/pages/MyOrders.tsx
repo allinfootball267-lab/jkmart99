@@ -168,9 +168,19 @@ export default function MyOrders() {
                       <span>Placed on {new Date(order.created_at).toLocaleString('en-IN')}</span>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs text-slate-400">Total Amount</span>
-                    <div className="text-xl font-bold text-slate-900">₹{order.total_amount.toLocaleString('en-IN')}</div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <span className="text-xs text-slate-400">Total Amount</span>
+                      <div className="text-xl font-bold text-slate-900">₹{order.total_amount.toLocaleString('en-IN')}</div>
+                    </div>
+                    <Link
+                      to={`/track-order?id=${order.id}`}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1"
+                      title="Track Live Shipping Status"
+                    >
+                      <Truck className="w-3.5 h-3.5" />
+                      <span>Track</span>
+                    </Link>
                   </div>
                 </div>
 

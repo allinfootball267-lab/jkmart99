@@ -1,5 +1,5 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { Search, Store, LogOut, User, ShoppingBag, Shield, ShoppingCart } from 'lucide-react';
+import { Search, Store, LogOut, User, ShoppingBag, Shield, ShoppingCart, Truck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { getStoredStoreName, saveStoredStoreName } from '../lib/utils';
@@ -80,7 +80,17 @@ export default function Layout() {
             </div>
           </div>
           
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+             {/* Track Order Link */}
+             <Link
+               to="/track-order"
+               className="p-2 text-slate-700 hover:text-blue-600 hover:bg-slate-100 rounded-xl transition-colors flex items-center gap-1.5 font-semibold text-sm"
+               title="Track Order (with or without account)"
+             >
+               <Truck className="w-5 h-5 text-blue-600" />
+               <span className="hidden lg:inline">Track Order</span>
+             </Link>
+
              {/* Header Cart Button with Live Badge */}
              <button
                onClick={toggleCart}
@@ -146,6 +156,8 @@ export default function Layout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-slate-500">
           <p className="font-bold text-slate-900 mb-2">{storeName}</p>
           <div className="flex justify-center gap-4 mt-4 flex-wrap text-sm text-blue-600 font-medium">
+            <Link to="/track-order" className="hover:underline font-bold text-blue-700">Track Your Order</Link>
+            <span>•</span>
             <Link to="/policies" className="hover:underline">Terms & Conditions</Link>
             <span>•</span>
             <Link to="/policies" className="hover:underline">Privacy Policy</Link>
