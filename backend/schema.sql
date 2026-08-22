@@ -163,3 +163,69 @@ DROP TRIGGER IF EXISTS auto_confirm_user_trigger ON auth.users;
 CREATE TRIGGER auto_confirm_user_trigger
   BEFORE INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.auto_confirm_user();
+
+-- ============================================================
+-- 6. PUBLIC ORDER TRACKING FUNCTION
+-- Enables instant guest & account order tracking by ID or Phone
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.track_order(p_query text)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_result json;
+  v_clean text;
+BEGIN
+  v_clean := TRIM(REPLACE(p_query, '#', ''));
+  IF v_clean = '' THEN
+    RETURN json_build_array();
+  END IF;
+
+  SELECT json_agg(o) INTO v_result
+  FROM (
+    SELECT 
+      orders.id,
+      orders.customer_name,
+      orders.phone,
+      orders.address,
+      orders.city,
+      orders.pin_code,
+      orders.total_amount,
+      orders.payment_method,
+      orders.status,
+      orders.created_at,
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', oi.id,
+              'quantity', oi.quantity,
+              'price', oi.price,
+              'products', json_build_object(
+                'name', p.name,
+                'image_url', p.image_url
+              )
+            )
+          )
+          FROM public.order_items oi
+          LEFT JOIN public.products p ON p.id = oi.product_id
+          WHERE oi.order_id = orders.id
+        ),
+        '[]'::json
+      ) AS order_items
+    FROM public.orders
+    WHERE 
+      orders.id::text ILIKE v_clean || '%'
+      OR orders.phone ILIKE '%' || v_clean || '%'
+      OR (LENGTH(v_clean) >= 10 AND orders.phone ILIKE '%' || RIGHT(v_clean, 10) || '%')
+    ORDER BY orders.created_at DESC
+    LIMIT 10
+  ) o;
+
+  RETURN COALESCE(v_result, '[]'::json);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.track_order(text) TO anon, authenticated;
+

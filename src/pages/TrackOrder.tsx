@@ -19,6 +19,7 @@ import {
   RefreshCw,
   MessageCircle,
   ArrowRight,
+  ChevronRight,
 } from 'lucide-react';
 
 type OrderWithItems = Order & {
@@ -41,11 +42,11 @@ type StoreSettings = {
 
 export default function TrackOrder() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialId = searchParams.get('id') || '';
+  const initialQuery = searchParams.get('id') || searchParams.get('q') || '';
 
-  const [orderIdInput, setOrderIdInput] = useState(initialId);
-  const [phoneInput, setPhoneInput] = useState('');
-  const [order, setOrder] = useState<OrderWithItems | null>(null);
+  const [searchInput, setSearchInput] = useState(initialQuery);
+  const [ordersList, setOrdersList] = useState<OrderWithItems[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<OrderWithItems | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -63,99 +64,136 @@ export default function TrackOrder() {
       });
   }, []);
 
-  // Perform search
-  const handleTrack = async (searchId?: string, searchPhone?: string) => {
-    const rawId = (searchId !== undefined ? searchId : orderIdInput).trim().replace(/^#/, '');
-    const phone = (searchPhone !== undefined ? searchPhone : phoneInput).trim();
+  // Search logic supporting both RPC and Direct Supabase fallback
+  const handleTrack = async (queryToSearch?: string) => {
+    const rawQuery = (queryToSearch !== undefined ? queryToSearch : searchInput).trim();
+    const cleanTerm = rawQuery.replace(/^#/, '').trim();
 
-    if (!rawId && !phone) {
-      setError('Please enter your Order ID or registered Phone Number.');
+    if (!cleanTerm) {
+      setError('Please enter your Order ID (e.g. #A1B2C3D4) or registered Mobile Number.');
       return;
     }
 
     setLoading(true);
     setError(null);
     setHasSearched(true);
+    setOrdersList([]);
+    setSelectedOrder(null);
 
     try {
-      let query = supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            id,
-            quantity,
-            price,
-            products (
-              name,
-              image_url
-            )
-          )
-        `);
+      let matchedOrders: OrderWithItems[] = [];
 
-      if (rawId) {
-        // If 36-char full UUID
-        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId)) {
-          query = query.eq('id', rawId);
+      // 1. Try RPC 'track_order' first
+      try {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('track_order', {
+          p_query: cleanTerm,
+        });
+
+        if (!rpcErr && Array.isArray(rpcData) && rpcData.length > 0) {
+          matchedOrders = rpcData as OrderWithItems[];
+        }
+      } catch (e) {
+        console.warn('RPC track_order not available, using fallback:', e);
+      }
+
+      // 2. Fallback to direct table query if RPC returned empty or failed
+      if (matchedOrders.length === 0) {
+        // Is it a full 36-character UUID?
+        const isFullUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanTerm);
+
+        let query = supabase
+          .from('orders')
+          .select(`
+            *,
+            order_items (
+              id,
+              quantity,
+              price,
+              products (
+                name,
+                image_url
+              )
+            )
+          `);
+
+        if (isFullUuid) {
+          query = query.eq('id', cleanTerm);
         } else {
-          // Allow tracking with 8-character prefix or partial ID
-          query = query.ilike('id', `${rawId}%`);
+          // If digits only or phone-like query
+          const digitsOnly = cleanTerm.replace(/[^0-9]/g, '');
+          if (digitsOnly.length >= 6) {
+            query = query.ilike('phone', `%${digitsOnly.slice(-10)}%`);
+          } else {
+            // Short ID fallback query
+            query = query.order('created_at', { ascending: false }).limit(25);
+          }
+        }
+
+        const { data: directData, error: directErr } = await query
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (!directErr && directData) {
+          if (isFullUuid) {
+            matchedOrders = directData as OrderWithItems[];
+          } else {
+            const digits = cleanTerm.replace(/[^0-9]/g, '');
+            if (digits.length >= 6) {
+              matchedOrders = directData as OrderWithItems[];
+            } else {
+              // Filter in-memory for 8-char short ID
+              matchedOrders = (directData as OrderWithItems[]).filter((o) =>
+                o.id.toLowerCase().startsWith(cleanTerm.toLowerCase())
+              );
+            }
+          }
         }
       }
 
-      if (phone) {
-        query = query.eq('phone', phone);
-      }
-
-      const { data, error: fetchErr } = await query
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (fetchErr) throw fetchErr;
-
-      if (data && data.length > 0) {
-        const foundOrder = data[0] as OrderWithItems;
-        setOrder(foundOrder);
-        // Save last tracked id to localStorage for convenience
+      if (matchedOrders.length > 0) {
+        setOrdersList(matchedOrders);
+        setSelectedOrder(matchedOrders[0]);
+        // Cache last tracked order ID
         try {
-          localStorage.setItem('last_tracked_order_id', foundOrder.id);
+          localStorage.setItem('last_tracked_order_id', matchedOrders[0].id);
         } catch {
           // ignore
         }
       } else {
-        setOrder(null);
-        setError('No order found matching your search. Please verify your Order ID or phone number.');
+        setOrdersList([]);
+        setSelectedOrder(null);
+        setError(
+          `No orders found matching "${rawQuery}". Please check your Order ID (from checkout receipt) or enter the registered phone number.`
+        );
       }
     } catch (err: any) {
       console.error('Tracking query error:', err);
       setError('Unable to fetch tracking info. Please check your connection and try again.');
-      setOrder(null);
     } finally {
       setLoading(false);
     }
   };
 
-  // Auto-search if query param is present on initial load
+  // Auto-search on initial load if query param is in URL
   useEffect(() => {
-    if (initialId) {
-      handleTrack(initialId);
+    if (initialQuery) {
+      handleTrack(initialQuery);
     } else {
-      // Check if localStorage has a recent order ID
       try {
         const savedId = localStorage.getItem('last_tracked_order_id');
         if (savedId && !hasSearched) {
-          setOrderIdInput(savedId.slice(0, 8).toUpperCase());
+          setSearchInput(savedId.slice(0, 8).toUpperCase());
         }
       } catch {
         // ignore
       }
     }
-  }, [initialId]);
+  }, [initialQuery]);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (orderIdInput.trim()) {
-      setSearchParams({ id: orderIdInput.trim().replace(/^#/, '') });
+    if (searchInput.trim()) {
+      setSearchParams({ q: searchInput.trim().replace(/^#/, '') });
     }
     handleTrack();
   };
@@ -189,7 +227,7 @@ export default function TrackOrder() {
     {
       id: 'Delivered',
       title: 'Delivered',
-      desc: 'Package handed over successfully',
+      desc: 'Package delivered successfully',
       icon: Package,
     },
   ];
@@ -210,7 +248,18 @@ export default function TrackOrder() {
     return 'upcoming';
   };
 
-  const shortId = order ? order.id.slice(0, 8).toUpperCase() : '';
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'Pending': return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'Confirmed': return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'Shipped': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+      case 'Delivered': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      case 'Cancelled': return 'bg-red-50 text-red-700 border-red-200';
+      default: return 'bg-slate-50 text-slate-700 border-slate-200';
+    }
+  };
+
+  const currentShortId = selectedOrder ? selectedOrder.id.slice(0, 8).toUpperCase() : '';
 
   return (
     <div className="max-w-3xl mx-auto py-4 sm:py-8">
@@ -223,68 +272,46 @@ export default function TrackOrder() {
           Track Your Order
         </h1>
         <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
-          Enter your Order ID (with or without account) to check live shipping status and order progress.
+          Enter your <strong>Order ID</strong> or <strong>Phone Number</strong> to check live delivery progress (no account required).
         </p>
       </div>
 
-      {/* Tracking Search Card */}
+      {/* Smart Search Form */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-7 shadow-xs mb-8">
         <form onSubmit={handleFormSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                Order ID / Reference #
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="e.g. 8A3F12BC or full UUID"
-                  value={orderIdInput}
-                  onChange={(e) => setOrderIdInput(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none text-sm font-medium"
-                />
-                <Package className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                Phone Number (Optional)
-              </label>
-              <div className="relative">
-                <input
-                  type="tel"
-                  placeholder="10-digit mobile number"
-                  value={phoneInput}
-                  onChange={(e) => setPhoneInput(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none text-sm font-medium"
-                />
-                <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-              </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+              Order ID or Mobile Number
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="e.g. #8A3F12BC or 9876543210"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="w-full pl-11 pr-28 sm:pr-32 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none text-sm font-medium"
+              />
+              <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-3.5" />
+              <button
+                type="submit"
+                disabled={loading}
+                className="absolute right-2 top-2 bottom-2 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Searching...</span>
+                  </>
+                ) : (
+                  <span>Track</span>
+                )}
+              </button>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <span className="text-xs text-slate-400">
-              Tip: You can find your Order ID in your checkout confirmation or SMS/email.
-            </span>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 shadow-xs disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Tracking...</span>
-                </>
-              ) : (
-                <>
-                  <Search className="w-4 h-4" />
-                  <span>Track Order</span>
-                </>
-              )}
-            </button>
+          <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 pt-1">
+            <span>✓ Search by 8-digit Order ID (e.g. #4F9A1B2C)</span>
+            <span>✓ Or search by 10-digit Phone Number</span>
           </div>
         </form>
       </div>
@@ -300,26 +327,73 @@ export default function TrackOrder() {
         </div>
       )}
 
-      {/* Order Results */}
-      {order && (
+      {/* Multiple Orders Selector (if searching by phone number returned >1 orders) */}
+      {ordersList.length > 1 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs mb-6">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+            Found {ordersList.length} Orders for this search — Select an Order to View:
+          </h3>
+          <div className="space-y-2">
+            {ordersList.map((ord) => {
+              const isSelected = selectedOrder?.id === ord.id;
+              const ordShortId = ord.id.slice(0, 8).toUpperCase();
+              return (
+                <button
+                  key={ord.id}
+                  type="button"
+                  onClick={() => setSelectedOrder(ord)}
+                  className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all ${
+                    isSelected
+                      ? 'border-blue-600 bg-blue-50/50 shadow-xs ring-1 ring-blue-500'
+                      : 'border-slate-200 bg-slate-50 hover:bg-slate-100/70'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono font-bold text-sm text-blue-600">#{ordShortId}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatusBadgeColor(ord.status)}`}>
+                      {ord.status}
+                    </span>
+                    <span className="text-xs text-slate-500 hidden sm:inline">
+                      {new Date(ord.created_at).toLocaleDateString('en-IN')}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-900">
+                      ₹{Number(ord.total_amount).toLocaleString('en-IN')}
+                    </span>
+                    <ChevronRight className={`w-4 h-4 ${isSelected ? 'text-blue-600' : 'text-slate-400'}`} />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Selected Order Details */}
+      {selectedOrder && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-3 duration-300">
           {/* Order Header Badge Card */}
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
             <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="font-mono text-lg font-bold text-blue-600">#{shortId}</span>
+                  <span className="font-mono text-lg font-bold text-blue-600">#{currentShortId}</span>
                   <button
-                    onClick={() => handleCopyId(order.id)}
+                    onClick={() => handleCopyId(selectedOrder.id)}
                     className="p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition-colors"
                     title="Copy full Order UUID"
                   >
                     {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                   </button>
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getStatusBadgeColor(selectedOrder.status)}`}>
+                    {selectedOrder.status}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-slate-500">
                   <Calendar className="w-3.5 h-3.5" />
-                  <span>Placed on {new Date(order.created_at).toLocaleDateString('en-IN', {
+                  <span>Placed on {new Date(selectedOrder.created_at).toLocaleDateString('en-IN', {
                     day: 'numeric',
                     month: 'short',
                     year: 'numeric',
@@ -332,20 +406,20 @@ export default function TrackOrder() {
               <div className="text-right">
                 <span className="text-xs text-slate-400 block">Total Amount</span>
                 <span className="text-2xl font-bold text-slate-900">
-                  ₹{Number(order.total_amount).toLocaleString('en-IN')}
+                  ₹{Number(selectedOrder.total_amount).toLocaleString('en-IN')}
                 </span>
-                <span className="text-[11px] text-slate-500 block font-medium">({order.payment_method})</span>
+                <span className="text-[11px] text-slate-500 block font-medium">({selectedOrder.payment_method})</span>
               </div>
             </div>
 
             {/* Cancelled Banner if cancelled */}
-            {order.status === 'Cancelled' ? (
+            {selectedOrder.status === 'Cancelled' ? (
               <div className="mt-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 text-red-700">
                 <XCircle className="w-6 h-6 text-red-500 shrink-0" />
                 <div>
                   <div className="font-semibold text-sm">Order Cancelled</div>
                   <div className="text-xs text-red-600 mt-0.5">
-                    This order was cancelled. Please contact support if you need further assistance.
+                    This order was cancelled. If you need any assistance, please contact store support below.
                   </div>
                 </div>
               </div>
@@ -358,7 +432,7 @@ export default function TrackOrder() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-6 sm:gap-2 relative z-10">
                     {steps.map((step) => {
-                      const state = getStepStatus(step.id, order.status);
+                      const state = getStepStatus(step.id, selectedOrder.status);
                       const StepIcon = step.icon;
 
                       return (
@@ -411,24 +485,24 @@ export default function TrackOrder() {
               <div className="space-y-3 text-xs">
                 <div>
                   <span className="text-slate-400 block mb-0.5">Recipient:</span>
-                  <span className="font-semibold text-slate-900 text-sm">{order.customer_name}</span>
+                  <span className="font-semibold text-slate-900 text-sm">{selectedOrder.customer_name}</span>
                 </div>
 
                 <div className="flex items-start gap-2 text-slate-700">
                   <Phone className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                  <span>{order.phone}</span>
+                  <span>{selectedOrder.phone}</span>
                 </div>
 
                 <div className="flex items-start gap-2 text-slate-700">
                   <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                   <span>
-                    {order.address}, {order.city} - {order.pin_code}
+                    {selectedOrder.address}, {selectedOrder.city} - {selectedOrder.pin_code}
                   </span>
                 </div>
 
                 <div className="pt-2 border-t border-slate-100 flex items-center gap-2 text-slate-700">
                   <CreditCard className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span>Payment: <strong>{order.payment_method}</strong></span>
+                  <span>Payment: <strong>{selectedOrder.payment_method}</strong></span>
                 </div>
               </div>
             </div>
@@ -436,12 +510,12 @@ export default function TrackOrder() {
             {/* Ordered Items List */}
             <div className="md:col-span-2 bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
-                Ordered Items ({order.order_items?.length || 0})
+                Ordered Items ({selectedOrder.order_items?.length || 0})
               </h3>
 
               <div className="space-y-3">
-                {order.order_items && order.order_items.length > 0 ? (
-                  order.order_items.map((item) => (
+                {selectedOrder.order_items && selectedOrder.order_items.length > 0 ? (
+                  selectedOrder.order_items.map((item) => (
                     <div
                       key={item.id}
                       className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100"
@@ -486,7 +560,7 @@ export default function TrackOrder() {
               <div>
                 <div className="text-sm font-bold text-slate-900">Need help with this order?</div>
                 <div className="text-xs text-slate-600">
-                  Contact {storeSettings.store_name || 'our support team'} directly for delivery questions.
+                  Contact {storeSettings.store_name || 'our support team'} directly for delivery updates.
                 </div>
               </div>
             </div>
@@ -495,7 +569,7 @@ export default function TrackOrder() {
               {storeSettings.whatsapp_number && (
                 <a
                   href={`https://wa.me/${storeSettings.whatsapp_number.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                    `Hi, I need help with my Order #${shortId}`
+                    `Hi, I need help with my Order #${currentShortId}`
                   )}`}
                   target="_blank"
                   rel="noreferrer"
@@ -520,11 +594,11 @@ export default function TrackOrder() {
       )}
 
       {/* Quick Help & FAQ section if no search yet */}
-      {!order && !hasSearched && (
+      {!selectedOrder && !hasSearched && (
         <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-6 text-slate-600 text-xs space-y-3">
-          <div className="font-bold text-slate-900 text-sm">How do I find my Order ID?</div>
+          <div className="font-bold text-slate-900 text-sm">How do I track my order?</div>
           <p>
-            When you complete an order on {storeSettings.store_name || 'our store'}, an 8-character reference code (e.g. <code>#4F9A1B2C</code>) is generated on your checkout receipt. You can also view all your past orders anytime if you have an account under <Link to="/my-orders" className="text-blue-600 font-semibold hover:underline">My Orders</Link>.
+            You can search using either your <strong>8-character Order ID</strong> (e.g. <code>#4F9A1B2C</code>) from your order confirmation or the <strong>Mobile Phone Number</strong> you entered during checkout.
           </p>
         </div>
       )}
